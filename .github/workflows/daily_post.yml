@@ -2,7 +2,7 @@ name: Daily SEO Post
 
 on:
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '0 8 * * 2,4,6'
   workflow_dispatch:
 
 permissions:
