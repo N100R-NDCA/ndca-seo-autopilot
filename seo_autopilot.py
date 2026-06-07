@@ -2,20 +2,19 @@
 """
 SEO Autopilot — keyword research, article generation, WordPress publishing.
 Runs daily and posts one SEO-optimised article to your WordPress site.
-Uses WordPress XML-RPC — works with your regular username and password, no plugins needed.
+Uses WordPress REST API with Basic Authentication plugin.
 """
 
 import json
 import random
 import re
 import sys
+import base64
 from datetime import datetime
 from pathlib import Path
 
 import anthropic
-from wordpress_xmlrpc import Client, WordPressPost
-from wordpress_xmlrpc.methods.posts import NewPost
-from wordpress_xmlrpc.methods.taxonomies import GetTerms
+import requests
 
 # ──────────────────────────────────────────
 # Paths
@@ -30,7 +29,7 @@ LOG      = BASE_DIR / "published.json"
 # ──────────────────────────────────────────
 def load_config() -> dict:
     if not CONFIG.exists():
-        sys.exit("[ERROR] config.json not found. Copy config.example.json → config.json and fill in your details.")
+        sys.exit("[ERROR] config.json not found.")
     with open(CONFIG) as f:
         return json.load(f)
 
@@ -158,51 +157,97 @@ def generate_article(cfg: dict, topic: str) -> dict:
     return json.loads(raw)
 
 # ──────────────────────────────────────────
-# Publish to WordPress via XML-RPC
+# Publish to WordPress via REST API
 # ──────────────────────────────────────────
 def publish_to_wordpress(cfg: dict, article: dict) -> dict:
-    wp_url    = cfg["wordpress_url"].rstrip("/") + "/xmlrpc.php"
-    username  = cfg["wordpress_username"]
-    password  = cfg["wordpress_password"]
-    status    = cfg.get("post_status", "draft")
-    category  = cfg.get("category", "News")
+    wp_url   = cfg["wordpress_url"].rstrip("/")
+    username = cfg["wordpress_username"]
+    password = cfg["wordpress_password"]
+    status   = cfg.get("post_status", "draft")
+    category = cfg.get("category", "News")
 
-    print(f"[INFO] Connecting to WordPress ({wp_url})...")
-    client = Client(wp_url, username, password)
+    api_base = f"{wp_url}/wp-json/wp/v2"
 
-    # Find or create category
-    terms = client.call(GetTerms("category"))
+    # Build Basic Auth header
+    credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+    headers = {
+        "Authorization": f"Basic {credentials}",
+        "Content-Type": "application/json",
+    }
+
+    print(f"[INFO] Connecting to WordPress REST API ({api_base})...")
+
+    # Test authentication
+    test = requests.get(f"{api_base}/users/me", headers=headers, timeout=30)
+    if test.status_code == 401:
+        print(f"[ERROR] Auth failed. Status: {test.status_code}")
+        print(f"[ERROR] Response: {test.text[:500]}")
+        print("[ERROR] Make sure the 'JSON Basic Authentication' plugin is installed and active.")
+        sys.exit(1)
+    elif test.status_code != 200:
+        print(f"[WARNING] Auth check returned {test.status_code} — continuing anyway...")
+
+    # Get or create category
     cat_id = None
-    for term in terms:
-        if term.name.lower() == category.lower():
-            cat_id = term.id
-            break
+    cats_resp = requests.get(
+        f"{api_base}/categories",
+        params={"search": category, "per_page": 10},
+        headers=headers,
+        timeout=30,
+    )
+    if cats_resp.status_code == 200:
+        cats = cats_resp.json()
+        for c in cats:
+            if c["name"].lower() == category.lower():
+                cat_id = c["id"]
+                break
 
-    post = WordPressPost()
-    post.title   = article["title"]
-    post.content = article["html_content"]
-    post.excerpt = article.get("meta_description", "")
-    post.post_status = status
+    if cat_id is None:
+        # Create the category
+        create_cat = requests.post(
+            f"{api_base}/categories",
+            headers=headers,
+            json={"name": category},
+            timeout=30,
+        )
+        if create_cat.status_code in (200, 201):
+            cat_id = create_cat.json().get("id")
 
+    # Build post payload
+    post_data = {
+        "title":   article["title"],
+        "content": article["html_content"],
+        "excerpt": article.get("meta_description", ""),
+        "status":  status,
+    }
     if cat_id:
-        post.terms_names = {"category": [category]}
-    else:
-        post.terms_names = {"category": [category]}
+        post_data["categories"] = [cat_id]
 
-    # Add custom fields for Yoast / Rank Math
-    post.custom_fields = [
-        {"key": "_yoast_wpseo_metadesc",   "value": article.get("meta_description", "")},
-        {"key": "_yoast_wpseo_focuskw",    "value": article.get("focus_keyword", "")},
-        {"key": "rank_math_focus_keyword", "value": article.get("focus_keyword", "")},
-        {"key": "rank_math_description",   "value": article.get("meta_description", "")},
-    ]
+    # Add Yoast / Rank Math meta via custom fields (requires ACF or direct meta)
+    post_data["meta"] = {
+        "_yoast_wpseo_metadesc":   article.get("meta_description", ""),
+        "_yoast_wpseo_focuskw":    article.get("focus_keyword", ""),
+        "rank_math_focus_keyword": article.get("focus_keyword", ""),
+        "rank_math_description":   article.get("meta_description", ""),
+    }
 
     print(f"[INFO] Publishing as '{status}'...")
-    post_id = client.call(NewPost(post))
+    resp = requests.post(
+        f"{api_base}/posts",
+        headers=headers,
+        json=post_data,
+        timeout=60,
+    )
 
+    if resp.status_code not in (200, 201):
+        print(f"[ERROR] Failed to create post. Status: {resp.status_code}")
+        print(f"[ERROR] Response: {resp.text[:1000]}")
+        sys.exit(1)
+
+    post = resp.json()
     return {
-        "id":    post_id,
-        "url":   f"{cfg['wordpress_url']}/?p={post_id}",
+        "id":    post.get("id"),
+        "url":   post.get("link", f"{wp_url}/?p={post.get('id')}"),
         "title": article["title"],
     }
 
