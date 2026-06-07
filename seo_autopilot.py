@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 SEO Autopilot — keyword research, article generation, WordPress publishing.
-Runs daily and posts one SEO-optimised article to your WordPress site.
-Uses a custom PHP endpoint (bypasses Hostinger Authorization header stripping).
+Runs Tuesday/Thursday/Saturday and posts one SEO-optimised article.
+Uses a custom PHP endpoint + HMRC accuracy review before publishing.
 """
 
 import json
@@ -97,10 +97,23 @@ def pick_topic(cfg: dict, log: list[dict]) -> str:
 # Generate article
 # ──────────────────────────────────────────
 def generate_article(cfg: dict, topic: str) -> dict:
-    client = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
-    niche  = cfg.get("niche", "accounting and finance for UK small businesses and founders")
-    site   = cfg.get("site_description", "an accounting blog for UK founders and small business owners")
-    tone   = cfg.get("tone", "clear, direct, and practical — no jargon, no fluff")
+    client   = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
+    niche    = cfg.get("niche", "accounting and finance for UK small businesses and founders")
+    site     = cfg.get("site_description", "an accounting blog for UK founders and small business owners")
+    tone     = cfg.get("tone", "clear, direct, and practical — no jargon, no fluff")
+    tax_year = cfg.get("tax_year", "2025/26")
+    rates    = cfg.get("hmrc_rates", {})
+
+    rates_text = ""
+    if rates:
+        rates_lines = "\n".join(f"  - {k.replace('_', ' ').title()}: {v}" for k, v in rates.items())
+        rates_text = (
+            f"\n\nCURRENT HMRC RATES ({tax_year} tax year — use ONLY these figures, do not use older rates):\n"
+            f"{rates_lines}\n"
+            f"Always state the tax year when quoting figures (e.g. 'In 2025/26...'). "
+            f"If a figure is not listed above and you are not certain of the current {tax_year} value, "
+            f"say 'check the latest HMRC guidance' rather than quoting a potentially outdated number."
+        )
 
     system = (
         f"You are an expert SEO content writer specialising in {niche}. "
@@ -113,6 +126,7 @@ def generate_article(cfg: dict, topic: str) -> dict:
         "valuable, vibrant, groundbreaking, renowned, diverse array, rich heritage, commitment to. "
         "Never end a sentence with a dangling '-ing' editorial phrase. "
         "Write in short declarative sentences. Use UK English."
+        f"{rates_text}"
     )
 
     internal_links = cfg.get("internal_links", {})
@@ -156,13 +170,77 @@ def generate_article(cfg: dict, topic: str) -> dict:
     return json.loads(raw)
 
 # ──────────────────────────────────────────
+# Review and correct article for HMRC accuracy
+# ──────────────────────────────────────────
+def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
+    client   = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
+    tax_year = cfg.get("tax_year", "2025/26")
+    rates    = cfg.get("hmrc_rates", {})
+
+    rates_lines = "\n".join(
+        f"  - {k.replace('_', ' ').title()}: {v}" for k, v in rates.items()
+    )
+
+    prompt = (
+        f"You are a qualified UK chartered accountant reviewing a blog article before publication on an accountancy firm's website.\n\n"
+        f"CURRENT HMRC RATES ({tax_year} tax year — these are authoritative):\n{rates_lines}\n\n"
+        f"ARTICLE TO REVIEW:\n"
+        f"Title: {article['title']}\n\n"
+        f"Meta description: {article.get('meta_description', '')}\n\n"
+        f"Content:\n{article['html_content']}\n\n"
+        "YOUR TASK:\n"
+        "1. Check every tax figure, rate, threshold, and allowance against the rates above.\n"
+        f"2. Replace any reference to the wrong tax year (e.g. 2024/25) with {tax_year}.\n"
+        "3. Correct any figures that don't match the rates provided.\n"
+        "4. If a figure or claim cannot be verified from the rates above and could be wrong, "
+        "replace it with 'check the latest HMRC guidance for current figures'.\n"
+        "5. Do not change the writing style, structure, or any non-tax content.\n\n"
+        "Return ONLY valid JSON with these exact keys:\n"
+        "  corrected_title          — title with any fixes applied\n"
+        "  corrected_meta           — meta description with any fixes applied\n"
+        "  corrected_content        — full HTML content with all corrections applied\n"
+        "  issues_found             — JSON array of strings describing what was corrected (empty if nothing changed)\n"
+        "  verdict                  — 'clean' (no issues), 'corrected' (fixed and ready), or 'needs_review' (uncertain claims remain)\n"
+    )
+
+    print("[INFO] Running HMRC accuracy check...")
+    msg = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=8192,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = msg.content[0].text.strip()
+    raw = re.sub(r"^```json\s*|^```\s*|```$", "", raw, flags=re.MULTILINE).strip()
+    result = json.loads(raw)
+
+    corrected = article.copy()
+    corrected["title"]            = result.get("corrected_title",   article["title"])
+    corrected["meta_description"] = result.get("corrected_meta",    article.get("meta_description", ""))
+    corrected["html_content"]     = result.get("corrected_content", article["html_content"])
+
+    issues  = result.get("issues_found", [])
+    verdict = result.get("verdict", "clean")
+
+    if issues:
+        print(f"[INFO] {len(issues)} correction(s) made:")
+        for issue in issues:
+            print(f"  - {issue}")
+    else:
+        print("[INFO] Article passed accuracy check — no corrections needed.")
+
+    is_publishable = verdict in ("clean", "corrected")
+    if not is_publishable:
+        print("[WARNING] Uncertain claims found — saving as draft for manual review.")
+
+    return corrected, is_publishable
+
+# ──────────────────────────────────────────
 # Publish to WordPress via custom PHP endpoint
-# (bypasses Authorization header stripping on Hostinger)
 # ──────────────────────────────────────────
 def publish_to_wordpress(cfg: dict, article: dict) -> dict:
     wp_url   = cfg["wordpress_url"].rstrip("/")
     username = cfg.get("wordpress_username", "")
-    secret   = cfg["wordpress_password"]   # holds the PHP endpoint secret key
+    secret   = cfg["wordpress_password"]
     status   = cfg.get("post_status", "draft")
     category = cfg.get("category", "News")
 
@@ -180,7 +258,7 @@ def publish_to_wordpress(cfg: dict, article: dict) -> dict:
         "meta_description": article.get("meta_description", ""),
     }
 
-    print(f"[INFO] Publishing to WordPress via custom endpoint...")
+    print(f"[INFO] Publishing as '{status}'...")
     resp = requests.post(endpoint, json=payload, timeout=60)
 
     if resp.status_code == 401:
@@ -218,6 +296,14 @@ def main():
     article = generate_article(cfg, topic)
     print(f"[INFO] Article generated: '{article['title']}'")
     print(f"[INFO] Focus keyword: {article.get('focus_keyword', 'n/a')}")
+
+    article, is_publishable = review_article(cfg, article)
+    print(f"[INFO] Reviewed title: '{article['title']}'")
+
+    original_status = cfg.get("post_status", "draft")
+    cfg["post_status"] = original_status if is_publishable else "draft"
+    if not is_publishable:
+        print(f"[INFO] Status overridden to 'draft' due to unverified claims.")
 
     result  = publish_to_wordpress(cfg, article)
     print(f"\n[SUCCESS] Posted: {result['title']}")
