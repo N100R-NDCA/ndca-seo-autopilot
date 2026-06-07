@@ -238,4 +238,119 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
 
     corrected = article.copy()
     corrected["title"]            = result.get("corrected_title",   article["title"])
-    corrected["meta_description"] = result.get("corrected_meta",    article.get("
+    corrected["meta_description"] = result.get("corrected_meta",    article.get("meta_description", ""))
+    corrected["html_content"]     = result.get("corrected_content", article["html_content"])
+
+    issues  = result.get("issues_found", [])
+    verdict = result.get("verdict", "clean")
+
+    if issues:
+        print(f"[INFO] {len(issues)} correction(s) made:")
+        for issue in issues:
+            print(f"  - {issue}")
+    else:
+        print("[INFO] Article passed accuracy check — no corrections needed.")
+
+    is_publishable = verdict in ("clean", "corrected")
+    if not is_publishable:
+        print("[WARNING] Uncertain claims found — saving as draft for manual review.")
+
+    return corrected, is_publishable
+
+# ──────────────────────────────────────────
+# Publish to WordPress via custom PHP endpoint
+# ──────────────────────────────────────────
+def publish_to_wordpress(cfg: dict, article: dict) -> dict:
+    wp_url   = cfg["wordpress_url"].rstrip("/")
+    username = cfg.get("wordpress_username", "")
+    secret   = cfg["wordpress_password"]
+    status   = cfg.get("post_status", "draft")
+    category = cfg.get("category", "News")
+
+    endpoint = f"{wp_url}/wp-seo-post.php"
+
+    payload = {
+        "secret":           secret,
+        "username":         username,
+        "title":            article["title"],
+        "content":          article["html_content"],
+        "excerpt":          article.get("meta_description", ""),
+        "status":           status,
+        "category":         category,
+        "focus_keyword":    article.get("focus_keyword", ""),
+        "meta_description": article.get("meta_description", ""),
+        "image_url":        article.get("image_url", ""),
+    }
+
+    print(f"[INFO] Publishing as '{status}'...")
+    resp = requests.post(endpoint, json=payload, timeout=60)
+
+    if resp.status_code == 401:
+        print(f"[ERROR] Secret key rejected (401). Update WP_PASSWORD secret to match wp-seo-post.php.")
+        sys.exit(1)
+    elif resp.status_code == 404:
+        print(f"[ERROR] Endpoint not found (404). Check that wp-seo-post.php exists in public_html.")
+        sys.exit(1)
+    elif resp.status_code not in (200, 201):
+        print(f"[ERROR] Failed to create post. Status: {resp.status_code}")
+        print(f"[ERROR] Response: {resp.text[:1000]}")
+        sys.exit(1)
+
+    post = resp.json()
+    return {
+        "id":    post.get("id"),
+        "url":   post.get("url", f"{wp_url}/?p={post.get('id')}"),
+        "title": article["title"],
+    }
+
+# ──────────────────────────────────────────
+# Main
+# ──────────────────────────────────────────
+def main():
+    print(f"\n{'='*60}")
+    print(f"  SEO Autopilot  —  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"{'='*60}\n")
+
+    cfg  = load_config()
+    log  = load_log()
+
+    topic   = pick_topic(cfg, log)
+    print(f"[INFO] Topic selected: {topic}")
+
+    article = generate_article(cfg, topic)
+    print(f"[INFO] Article generated: '{article['title']}'")
+    print(f"[INFO] Focus keyword: {article.get('focus_keyword', 'n/a')}")
+
+    article, is_publishable = review_article(cfg, article)
+    print(f"[INFO] Reviewed title: '{article['title']}'")
+
+    original_status = cfg.get("post_status", "draft")
+    cfg["post_status"] = original_status if is_publishable else "draft"
+    if not is_publishable:
+        print(f"[INFO] Status overridden to 'draft' due to unverified claims.")
+
+    image_url = get_featured_image_url(cfg, article.get("focus_keyword", topic))
+    if image_url:
+        print(f"[INFO] Featured image fetched from Pexels.")
+    else:
+        print(f"[INFO] No featured image — continuing without one.")
+    article["image_url"] = image_url
+
+    result  = publish_to_wordpress(cfg, article)
+    print(f"\n[SUCCESS] Posted: {result['title']}")
+    print(f"[SUCCESS] Post ID: {result.get('id')}")
+    print(f"[SUCCESS] URL: {result.get('url')}")
+
+    log.append({
+        "topic":     topic,
+        "title":     article["title"],
+        "keyword":   article.get("focus_keyword", ""),
+        "post_id":   result.get("id"),
+        "url":       result.get("url"),
+        "published": datetime.now().isoformat(),
+    })
+    save_log(log)
+    print(f"\n[INFO] Log updated ({len(log)} total posts).\n")
+
+if __name__ == "__main__":
+    main()
