@@ -1,0 +1,37 @@
+{
+  "anthropic_api_key": "REPLACED_BY_GITHUB_SECRET",
+
+  "wordpress_url":      "https://nd-ca.co.uk",
+  "wordpress_username": "info@ndcabookkeeping.co.uk",
+  "wordpress_password": "REPLACED_BY_GITHUB_SECRET",
+
+  "post_status": "draft",
+
+  "category": "News",
+
+  "niche": "UK accounting and tax for small businesses, limited company directors, sole traders, landlords, construction trades, e-commerce sellers, freelancers, and healthcare professionals",
+
+  "site_description": "NDCA is a chartered certified accountants firm based in the UK offering bookkeeping, corporation tax, self assessment, VAT returns, payroll, CIS returns, management accounts, and Xero training to small businesses and sole traders",
+
+  "tone": "clear, direct, and practical — no jargon, no waffle. Sounds like a knowledgeable chartered accountant giving real advice to a client. UK English throughout.",
+
+  "internal_links": {
+    "bookkeeping":            "https://nd-ca.co.uk/bookkeeping/",
+    "self assessment":        "https://nd-ca.co.uk/self-assessment/",
+    "VAT returns":            "https://nd-ca.co.uk/vat-returns/",
+    "corporation tax":        "https://nd-ca.co.uk/corporation-tax/",
+    "annual accounts":        "https://nd-ca.co.uk/annual-accounts/",
+    "payroll":                "https://nd-ca.co.uk/payroll/",
+    "CIS returns":            "https://nd-ca.co.uk/cis-returns/",
+    "management accounts":    "https://nd-ca.co.uk/management-accounts/",
+    "cash flow":              "https://nd-ca.co.uk/cash-flow-and-budgeting/",
+    "Making Tax Digital":     "https://nd-ca.co.uk/making-tax-digital/",
+    "Xero training":          "https://nd-ca.co.uk/xero-training/",
+    "landlords":              "https://nd-ca.co.uk/landlords-and-property-investors/",
+    "construction":           "https://nd-ca.co.uk/construction-and-trades/",
+    "e-commerce":             "https://nd-ca.co.uk/e-commerce-and-retail/",
+    "freelancers":            "https://nd-ca.co.uk/agencies-consultants-and-freelancers/",
+    "healthcare":             "https://nd-ca.co.uk/healthcare-professionals/",
+    "content creators":       "https://nd-ca.co.uk/influencers-and-content-creators/"
+  }
+}
