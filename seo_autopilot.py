@@ -63,7 +63,7 @@ def pick_topic(cfg: dict, log: list[dict]) -> str:
     niche  = cfg.get("niche", "accounting and finance for UK small businesses and founders")
 
     msg = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         messages=[{
             "role": "user",
@@ -160,7 +160,7 @@ def generate_article(cfg: dict, topic: str) -> dict:
 
     print(f"[INFO] Generating article: '{topic}'...")
     msg = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-sonnet-4-6",
         max_tokens=8192,
         messages=[{"role": "user", "content": prompt}],
         system=system,
@@ -205,7 +205,7 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
 
     print("[INFO] Running HMRC accuracy check...")
     msg = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-sonnet-4-6",
         max_tokens=8192,
         messages=[{"role": "user", "content": prompt}],
     )
