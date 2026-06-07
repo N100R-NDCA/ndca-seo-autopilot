@@ -99,4 +99,143 @@ def pick_topic(cfg: dict, log: list[dict]) -> str:
 def generate_article(cfg: dict, topic: str) -> dict:
     client   = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
     niche    = cfg.get("niche", "accounting and finance for UK small businesses and founders")
-    site     = cfg.get("site_
+    site     = cfg.get("site_description", "an accounting blog for UK founders and small business owners")
+    tone     = cfg.get("tone", "clear, direct, and practical — no jargon, no fluff")
+    tax_year = cfg.get("tax_year", "2025/26")
+    rates    = cfg.get("hmrc_rates", {})
+
+    rates_text = ""
+    if rates:
+        rates_lines = "\n".join(f"  - {k.replace('_', ' ').title()}: {v}" for k, v in rates.items())
+        rates_text = (
+            f"\n\nCURRENT HMRC RATES ({tax_year} tax year — use ONLY these figures, do not use older rates):\n"
+            f"{rates_lines}\n"
+            f"Always state the tax year when quoting figures (e.g. 'In 2025/26...'). "
+            f"If a figure is not listed above and you are not certain of the current {tax_year} value, "
+            f"say 'check the latest HMRC guidance' rather than quoting a potentially outdated number."
+        )
+
+    system = (
+        f"You are an expert SEO content writer specialising in {niche}. "
+        f"The blog is {site}. "
+        f"Tone: {tone}. "
+        "Write for humans first, search engines second. "
+        "Never use the banned words: additionally, align with, boasts, bolstered, crucial, delve, emphasizing, "
+        "enduring, enhance, fostering, garner, highlight/highlights as a verb, interplay, intricate, key as filler, "
+        "landscape in abstract use, meticulous, pivotal, showcase, tapestry, testament, underscore as a verb, "
+        "valuable, vibrant, groundbreaking, renowned, diverse array, rich heritage, commitment to. "
+        "Never end a sentence with a dangling '-ing' editorial phrase. "
+        "Write in short declarative sentences. Use UK English."
+        f"{rates_text}"
+    )
+
+    internal_links = cfg.get("internal_links", {})
+    links_instruction = ""
+    if internal_links:
+        links_list = "\n".join(f'  - "{k}" → {v}' for k, v in internal_links.items())
+        links_instruction = (
+            f"\n- Where relevant, naturally link to these internal service pages using the anchor text shown:\n{links_list}\n"
+            "  Only link where it genuinely fits — do not force links."
+        )
+
+    prompt = (
+        f"Write a complete, publish-ready SEO blog article about: '{topic}'.\n\n"
+        "Return ONLY valid JSON with these exact keys:\n"
+        "  title          — H1 title (under 60 chars, includes primary keyword)\n"
+        "  meta_description — meta description (120–155 chars, includes keyword)\n"
+        "  focus_keyword  — the primary target keyword\n"
+        "  html_content   — full article body in HTML (no <html>/<body> wrapper)\n\n"
+        "Article requirements:\n"
+        "- 1,500–2,500 words\n"
+        "- H2 and H3 subheadings throughout\n"
+        "- Natural keyword placement (no stuffing)\n"
+        "- A clear intro that answers the question quickly\n"
+        "- Practical, actionable advice throughout\n"
+        "- A short conclusion without 'In summary' or 'In conclusion'\n"
+        "- At least one <ul> or <ol> list\n"
+        "- UK spelling and UK tax/accounting context where relevant\n"
+        "- No fluff, no padding, no promotional tone"
+        f"{links_instruction}"
+    )
+
+    print(f"[INFO] Generating article: '{topic}'...")
+    msg = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=8192,
+        messages=[{"role": "user", "content": prompt}],
+        system=system,
+    )
+    raw = msg.content[0].text.strip()
+    raw = re.sub(r"^```json\s*|^```\s*|```$", "", raw, flags=re.MULTILINE).strip()
+    return json.loads(raw)
+
+# ──────────────────────────────────────────
+# Fetch featured image from Pexels
+# ──────────────────────────────────────────
+def get_featured_image_url(cfg: dict, keyword: str) -> str:
+    api_key = cfg.get("pexels_api_key", "")
+    if not api_key or api_key == "placeholder":
+        return ""
+    try:
+        resp = requests.get(
+            "https://api.pexels.com/v1/search",
+            headers={"Authorization": api_key},
+            params={"query": keyword, "orientation": "landscape", "per_page": 5},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            photos = resp.json().get("photos", [])
+            if photos:
+                photo = random.choice(photos)
+                return photo["src"]["large"]
+    except Exception as e:
+        print(f"[WARNING] Could not fetch image: {e}")
+    return ""
+
+# ──────────────────────────────────────────
+# Review and correct article for HMRC accuracy
+# ──────────────────────────────────────────
+def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
+    client   = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
+    tax_year = cfg.get("tax_year", "2025/26")
+    rates    = cfg.get("hmrc_rates", {})
+
+    rates_lines = "\n".join(
+        f"  - {k.replace('_', ' ').title()}: {v}" for k, v in rates.items()
+    )
+
+    prompt = (
+        f"You are a qualified UK chartered accountant reviewing a blog article before publication on an accountancy firm's website.\n\n"
+        f"CURRENT HMRC RATES ({tax_year} tax year — these are authoritative):\n{rates_lines}\n\n"
+        f"ARTICLE TO REVIEW:\n"
+        f"Title: {article['title']}\n\n"
+        f"Meta description: {article.get('meta_description', '')}\n\n"
+        f"Content:\n{article['html_content']}\n\n"
+        "YOUR TASK:\n"
+        "1. Check every tax figure, rate, threshold, and allowance against the rates above.\n"
+        f"2. Replace any reference to the wrong tax year (e.g. 2024/25) with {tax_year}.\n"
+        "3. Correct any figures that don't match the rates provided.\n"
+        "4. If a figure or claim cannot be verified from the rates above and could be wrong, "
+        "replace it with 'check the latest HMRC guidance for current figures'.\n"
+        "5. Do not change the writing style, structure, or any non-tax content.\n\n"
+        "Return ONLY valid JSON with these exact keys:\n"
+        "  corrected_title          — title with any fixes applied\n"
+        "  corrected_meta           — meta description with any fixes applied\n"
+        "  corrected_content        — full HTML content with all corrections applied\n"
+        "  issues_found             — JSON array of strings describing what was corrected (empty if nothing changed)\n"
+        "  verdict                  — 'clean' (no issues), 'corrected' (fixed and ready), or 'needs_review' (uncertain claims remain)\n"
+    )
+
+    print("[INFO] Running HMRC accuracy check...")
+    msg = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=8192,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = msg.content[0].text.strip()
+    raw = re.sub(r"^```json\s*|^```\s*|```$", "", raw, flags=re.MULTILINE).strip()
+    result = json.loads(raw)
+
+    corrected = article.copy()
+    corrected["title"]            = result.get("corrected_title",   article["title"])
+    corrected["meta_description"] = result.get("corrected_meta",    article.get("
