@@ -2,9 +2,11 @@ name: Daily SEO Post
 
 on:
   schedule:
-    # Runs every day at 9:00 AM UK time (8:00 AM UTC in winter, adjust for BST if needed)
     - cron: '0 8 * * *'
-  workflow_dispatch:  # Also allows manual run from GitHub website with one click
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   post:
@@ -44,6 +46,7 @@ jobs:
         run: |
           git config user.email "seoautopilot@ndca"
           git config user.name "SEO Autopilot"
+          git remote set-url origin https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}
           git add published.json
           git diff --staged --quiet || git commit -m "Log: post $(date +'%Y-%m-%d')"
           git push
