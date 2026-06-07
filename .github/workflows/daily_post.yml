@@ -27,6 +27,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           WP_PASSWORD: ${{ secrets.WP_PASSWORD }}
+          PEXELS_KEY: ${{ secrets.PEXELS_KEY }}
         run: |
           python3 - <<'EOF'
           import json, os
@@ -34,6 +35,7 @@ jobs:
               cfg = json.load(f)
           cfg["anthropic_api_key"] = os.environ["ANTHROPIC_API_KEY"]
           cfg["wordpress_password"] = os.environ["WP_PASSWORD"]
+          cfg["pexels_api_key"] = os.environ["PEXELS_KEY"]
           with open("config.json", "w") as f:
               json.dump(cfg, f, indent=2)
           print("Config updated from secrets.")
