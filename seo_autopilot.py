@@ -2,14 +2,13 @@
 """
 SEO Autopilot — keyword research, article generation, WordPress publishing.
 Runs daily and posts one SEO-optimised article to your WordPress site.
-Uses WordPress REST API with Basic Authentication plugin.
+Uses a custom PHP endpoint (bypasses Hostinger Authorization header stripping).
 """
 
 import json
 import random
 import re
 import sys
-import base64
 from datetime import datetime
 from pathlib import Path
 
@@ -157,89 +156,40 @@ def generate_article(cfg: dict, topic: str) -> dict:
     return json.loads(raw)
 
 # ──────────────────────────────────────────
-# Publish to WordPress via REST API
+# Publish to WordPress via custom PHP endpoint
+# (bypasses Authorization header stripping on Hostinger)
 # ──────────────────────────────────────────
 def publish_to_wordpress(cfg: dict, article: dict) -> dict:
     wp_url   = cfg["wordpress_url"].rstrip("/")
-    username = cfg["wordpress_username"]
-    password = cfg["wordpress_password"]
+    username = cfg.get("wordpress_username", "")
+    secret   = cfg["wordpress_password"]   # holds the PHP endpoint secret key
     status   = cfg.get("post_status", "draft")
     category = cfg.get("category", "News")
 
-    api_base = f"{wp_url}/wp-json/wp/v2"
+    endpoint = f"{wp_url}/wp-seo-post.php"
 
-    # Build Basic Auth header
-    credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-    headers = {
-        "Authorization": f"Basic {credentials}",
-        "Content-Type": "application/json",
+    payload = {
+        "secret":           secret,
+        "username":         username,
+        "title":            article["title"],
+        "content":          article["html_content"],
+        "excerpt":          article.get("meta_description", ""),
+        "status":           status,
+        "category":         category,
+        "focus_keyword":    article.get("focus_keyword", ""),
+        "meta_description": article.get("meta_description", ""),
     }
 
-    print(f"[INFO] Connecting to WordPress REST API ({api_base})...")
+    print(f"[INFO] Publishing to WordPress via custom endpoint...")
+    resp = requests.post(endpoint, json=payload, timeout=60)
 
-    # Test authentication
-    test = requests.get(f"{api_base}/users/me", headers=headers, timeout=30)
-    if test.status_code == 401:
-        print(f"[ERROR] Auth failed. Status: {test.status_code}")
-        print(f"[ERROR] Response: {test.text[:500]}")
-        print("[ERROR] Make sure the 'JSON Basic Authentication' plugin is installed and active.")
+    if resp.status_code == 401:
+        print(f"[ERROR] Secret key rejected (401). Update WP_PASSWORD secret to match wp-seo-post.php.")
         sys.exit(1)
-    elif test.status_code != 200:
-        print(f"[WARNING] Auth check returned {test.status_code} — continuing anyway...")
-
-    # Get or create category
-    cat_id = None
-    cats_resp = requests.get(
-        f"{api_base}/categories",
-        params={"search": category, "per_page": 10},
-        headers=headers,
-        timeout=30,
-    )
-    if cats_resp.status_code == 200:
-        cats = cats_resp.json()
-        for c in cats:
-            if c["name"].lower() == category.lower():
-                cat_id = c["id"]
-                break
-
-    if cat_id is None:
-        # Create the category
-        create_cat = requests.post(
-            f"{api_base}/categories",
-            headers=headers,
-            json={"name": category},
-            timeout=30,
-        )
-        if create_cat.status_code in (200, 201):
-            cat_id = create_cat.json().get("id")
-
-    # Build post payload
-    post_data = {
-        "title":   article["title"],
-        "content": article["html_content"],
-        "excerpt": article.get("meta_description", ""),
-        "status":  status,
-    }
-    if cat_id:
-        post_data["categories"] = [cat_id]
-
-    # Add Yoast / Rank Math meta via custom fields (requires ACF or direct meta)
-    post_data["meta"] = {
-        "_yoast_wpseo_metadesc":   article.get("meta_description", ""),
-        "_yoast_wpseo_focuskw":    article.get("focus_keyword", ""),
-        "rank_math_focus_keyword": article.get("focus_keyword", ""),
-        "rank_math_description":   article.get("meta_description", ""),
-    }
-
-    print(f"[INFO] Publishing as '{status}'...")
-    resp = requests.post(
-        f"{api_base}/posts",
-        headers=headers,
-        json=post_data,
-        timeout=60,
-    )
-
-    if resp.status_code not in (200, 201):
+    elif resp.status_code == 404:
+        print(f"[ERROR] Endpoint not found (404). Check that wp-seo-post.php exists in public_html.")
+        sys.exit(1)
+    elif resp.status_code not in (200, 201):
         print(f"[ERROR] Failed to create post. Status: {resp.status_code}")
         print(f"[ERROR] Response: {resp.text[:1000]}")
         sys.exit(1)
@@ -247,7 +197,7 @@ def publish_to_wordpress(cfg: dict, article: dict) -> dict:
     post = resp.json()
     return {
         "id":    post.get("id"),
-        "url":   post.get("link", f"{wp_url}/?p={post.get('id')}"),
+        "url":   post.get("url", f"{wp_url}/?p={post.get('id')}"),
         "title": article["title"],
     }
 
