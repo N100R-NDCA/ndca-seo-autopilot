@@ -1,1 +1,48 @@
-.github/workflows/daily_post.yml
+name: Daily SEO Post
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install anthropic requests python-wordpress-xmlrpc
+
+      - name: Write config from secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          WP_PASSWORD: ${{ secrets.WP_PASSWORD }}
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          with open("config.json") as f:
+              cfg = json.load(f)
+          cfg["anthropic_api_key"] = os.environ["ANTHROPIC_API_KEY"]
+          cfg["wordpress_password"] = os.environ["WP_PASSWORD"]
+          with open("config.json", "w") as f:
+              json.dump(cfg, f, indent=2)
+          print("Config updated from secrets.")
+          EOF
+
+      - name: Run SEO Autopilot
+        run: python3 seo_autopilot.py
+
+      - name: Save published log back to repo
+        run: |
+          git config user.email "seoautopilot@ndca"
+          git config user.name "SEO Autopilot"
+          git add published.json
+          git diff --staged --quiet || git commit -m "Log: post $(date +'%Y-%m-%d')"
+          git push
