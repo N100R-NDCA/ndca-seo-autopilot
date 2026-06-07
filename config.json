@@ -1,13 +1,39 @@
 {
-  "anthropic_api_key": "REPLACED_BY_GITHUB_SECRET",
+  "anthropic_api_key": "placeholder",
 
   "wordpress_url":      "https://nd-ca.co.uk",
   "wordpress_username": "info@ndcabookkeeping.co.uk",
-  "wordpress_password": "REPLACED_BY_GITHUB_SECRET",
+  "wordpress_password": "placeholder",
 
-  "post_status": "draft",
+  "post_status": "publish",
 
   "category": "News",
+
+  "tax_year": "2025/26",
+
+  "hmrc_rates": {
+    "personal_allowance": "£12,570",
+    "basic_rate_threshold": "£50,270",
+    "higher_rate_threshold": "£125,140",
+    "basic_rate": "20%",
+    "higher_rate": "40%",
+    "additional_rate": "45%",
+    "corporation_tax_small": "19% (profits under £50,000)",
+    "corporation_tax_main": "25% (profits over £250,000)",
+    "corporation_tax_marginal": "marginal relief between £50,000 and £250,000",
+    "employer_ni_rate": "15%",
+    "employer_ni_threshold": "£5,000",
+    "employee_ni_rate": "8% (on earnings £12,570–£50,270)",
+    "dividend_allowance": "£500",
+    "dividend_basic_rate": "8.75%",
+    "dividend_higher_rate": "33.75%",
+    "dividend_additional_rate": "39.35%",
+    "capital_gains_allowance": "£3,000",
+    "vat_registration_threshold": "£90,000",
+    "isa_allowance": "£20,000",
+    "pension_annual_allowance": "£60,000",
+    "mtd_itsa_start": "April 2026 (self-employed and landlords with income over £50,000)"
+  },
 
   "niche": "UK accounting and tax for small businesses, limited company directors, sole traders, landlords, construction trades, e-commerce sellers, freelancers, and healthcare professionals",
 
@@ -16,22 +42,22 @@
   "tone": "clear, direct, and practical — no jargon, no waffle. Sounds like a knowledgeable chartered accountant giving real advice to a client. UK English throughout.",
 
   "internal_links": {
-    "bookkeeping":            "https://nd-ca.co.uk/bookkeeping/",
-    "self assessment":        "https://nd-ca.co.uk/self-assessment/",
-    "VAT returns":            "https://nd-ca.co.uk/vat-returns/",
-    "corporation tax":        "https://nd-ca.co.uk/corporation-tax/",
-    "annual accounts":        "https://nd-ca.co.uk/annual-accounts/",
-    "payroll":                "https://nd-ca.co.uk/payroll/",
-    "CIS returns":            "https://nd-ca.co.uk/cis-returns/",
-    "management accounts":    "https://nd-ca.co.uk/management-accounts/",
-    "cash flow":              "https://nd-ca.co.uk/cash-flow-and-budgeting/",
-    "Making Tax Digital":     "https://nd-ca.co.uk/making-tax-digital/",
-    "Xero training":          "https://nd-ca.co.uk/xero-training/",
-    "landlords":              "https://nd-ca.co.uk/landlords-and-property-investors/",
-    "construction":           "https://nd-ca.co.uk/construction-and-trades/",
-    "e-commerce":             "https://nd-ca.co.uk/e-commerce-and-retail/",
-    "freelancers":            "https://nd-ca.co.uk/agencies-consultants-and-freelancers/",
-    "healthcare":             "https://nd-ca.co.uk/healthcare-professionals/",
-    "content creators":       "https://nd-ca.co.uk/influencers-and-content-creators/"
+    "bookkeeping":         "https://nd-ca.co.uk/bookkeeping/",
+    "self assessment":     "https://nd-ca.co.uk/self-assessment/",
+    "VAT returns":         "https://nd-ca.co.uk/vat-returns/",
+    "corporation tax":     "https://nd-ca.co.uk/corporation-tax/",
+    "annual accounts":     "https://nd-ca.co.uk/annual-accounts/",
+    "payroll":             "https://nd-ca.co.uk/payroll/",
+    "CIS returns":         "https://nd-ca.co.uk/cis-returns/",
+    "management accounts": "https://nd-ca.co.uk/management-accounts/",
+    "cash flow":           "https://nd-ca.co.uk/cash-flow-and-budgeting/",
+    "Making Tax Digital":  "https://nd-ca.co.uk/making-tax-digital/",
+    "Xero training":       "https://nd-ca.co.uk/xero-training/",
+    "landlords":           "https://nd-ca.co.uk/landlords-and-property-investors/",
+    "construction":        "https://nd-ca.co.uk/construction-and-trades/",
+    "e-commerce":          "https://nd-ca.co.uk/e-commerce-and-retail/",
+    "freelancers":         "https://nd-ca.co.uk/agencies-consultants-and-freelancers/",
+    "healthcare":          "https://nd-ca.co.uk/healthcare-professionals/",
+    "content creators":    "https://nd-ca.co.uk/influencers-and-content-creators/"
   }
 }
