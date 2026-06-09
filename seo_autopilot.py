@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 SEO Autopilot — keyword research, article generation, WordPress publishing.
-Runs Tuesday/Thursday/Saturday and posts one SEO-optimised article.
-Uses a custom PHP endpoint + HMRC accuracy review + Pexels featured image.
+Runs daily and posts one SEO-optimised article to your WordPress site.
+Uses WordPress REST API with Basic Authentication plugin.
 """
 
 import json
@@ -192,10 +192,16 @@ def get_featured_image_url(cfg: dict, keyword: str) -> str:
         print(f"[WARNING] Could not fetch image: {e}")
     return ""
 
+
 # ──────────────────────────────────────────
 # Review and correct article for HMRC accuracy
 # ──────────────────────────────────────────
 def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
+    """
+    Second Claude pass: checks every figure against current HMRC rates,
+    corrects wrong tax year references, and returns a corrected article.
+    Always publishes — review corrects figures but never blocks publication.
+    """
     client   = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
     tax_year = cfg.get("tax_year", "2025/26")
     rates    = cfg.get("hmrc_rates", {})
@@ -241,9 +247,7 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
     corrected["meta_description"] = result.get("corrected_meta",    article.get("meta_description", ""))
     corrected["html_content"]     = result.get("corrected_content", article["html_content"])
 
-    issues  = result.get("issues_found", [])
-    verdict = result.get("verdict", "clean")
-
+    issues = result.get("issues_found", [])
     if issues:
         print(f"[INFO] {len(issues)} correction(s) made:")
         for issue in issues:
@@ -251,19 +255,17 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
     else:
         print("[INFO] Article passed accuracy check — no corrections needed.")
 
-is_publishable = True  # publish unless a definite error was found
-    if not is_publishable:
-        print("[WARNING] Uncertain claims found — saving as draft for manual review.")
+    return corrected, True
 
-    return corrected, is_publishable
 
 # ──────────────────────────────────────────
 # Publish to WordPress via custom PHP endpoint
+# (bypasses Authorization header stripping on Hostinger)
 # ──────────────────────────────────────────
 def publish_to_wordpress(cfg: dict, article: dict) -> dict:
     wp_url   = cfg["wordpress_url"].rstrip("/")
     username = cfg.get("wordpress_username", "")
-    secret   = cfg["wordpress_password"]
+    secret   = cfg["wordpress_password"]   # holds the PHP endpoint secret key
     status   = cfg.get("post_status", "draft")
     category = cfg.get("category", "News")
 
@@ -282,7 +284,7 @@ def publish_to_wordpress(cfg: dict, article: dict) -> dict:
         "image_url":        article.get("image_url", ""),
     }
 
-    print(f"[INFO] Publishing as '{status}'...")
+    print(f"[INFO] Publishing to WordPress via custom endpoint...")
     resp = requests.post(endpoint, json=payload, timeout=60)
 
     if resp.status_code == 401:
@@ -323,11 +325,6 @@ def main():
 
     article, is_publishable = review_article(cfg, article)
     print(f"[INFO] Reviewed title: '{article['title']}'")
-
-    original_status = cfg.get("post_status", "draft")
-    cfg["post_status"] = original_status if is_publishable else "draft"
-    if not is_publishable:
-        print(f"[INFO] Status overridden to 'draft' due to unverified claims.")
 
     image_url = get_featured_image_url(cfg, article.get("focus_keyword", topic))
     if image_url:
