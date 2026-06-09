@@ -287,11 +287,16 @@ def publish_to_wordpress(cfg: dict, article: dict) -> dict:
         "image_url":        article.get("image_url", ""),
     }
 
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
+
     print(f"[INFO] Publishing to WordPress via custom endpoint...")
     resp = None
     for attempt in range(1, 4):
         try:
-            resp = requests.post(endpoint, json=payload, timeout=60)
+            resp = requests.post(endpoint, json=payload, headers=headers, timeout=60)
             break
         except requests.exceptions.Timeout:
             print(f"[WARNING] Attempt {attempt}/3 timed out. Waiting 15s...")
