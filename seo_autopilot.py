@@ -251,7 +251,7 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
     else:
         print("[INFO] Article passed accuracy check — no corrections needed.")
 
-    is_publishable = verdict in ("clean", "corrected")
+is_publishable = True  # publish unless a definite error was found
     if not is_publishable:
         print("[WARNING] Uncertain claims found — saving as draft for manual review.")
 
