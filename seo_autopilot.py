@@ -149,7 +149,7 @@ def generate_article(cfg: dict, topic: str) -> dict:
         "Article requirements:\n"
         "- 1,500–2,500 words\n"
         "- Start with a 2–3 sentence overview paragraph (inside a <p> tag) that summarises what the article covers and who it's for\n"
-        "- Immediately after the overview, include a Table of Contents as a <ul> with anchor links to each H2 section — e.g. <li><a href='#section-slug'>Section Title</a></li>\n"
+        "- Immediately after the overview, include a Table of Contents as a <ul> with anchor links to each H2 section — e.g. <li><a href='#section-slug'>Section Title</a></li> — include 'Frequently asked questions' as the last TOC entry linking to #faqs\n"
         "- Each H2 must have a matching id attribute that corresponds to its TOC link — e.g. <h2 id='section-slug'>Section Title</h2>\n"
         "- H2 and H3 subheadings throughout\n"
         "- Natural keyword placement (no stuffing)\n"
@@ -157,7 +157,8 @@ def generate_article(cfg: dict, topic: str) -> dict:
         "- A short conclusion without 'In summary' or 'In conclusion'\n"
         "- At least one <ul> or <ol> list\n"
         "- UK spelling and UK tax/accounting context where relevant\n"
-        "- No fluff, no padding, no promotional tone"
+        "- No fluff, no padding, no promotional tone\n"
+        "- End the article with an FAQ section: use <h2 id='faqs'>Frequently asked questions</h2> followed by 4–6 questions as <h3> tags, each with a concise answer in a <p> tag. Questions should reflect what someone would actually search for on this topic."
         f"{links_instruction}"
     )
 
