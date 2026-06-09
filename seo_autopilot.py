@@ -167,6 +167,7 @@ def generate_article(cfg: dict, topic: str) -> dict:
     )
     raw = msg.content[0].text.strip()
     raw = re.sub(r"^```json\s*|^```\s*|```$", "", raw, flags=re.MULTILINE).strip()
+    raw = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw)  # fix invalid JSON escapes
     return json.loads(raw)
 
 # ──────────────────────────────────────────
@@ -240,6 +241,7 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
     )
     raw = msg.content[0].text.strip()
     raw = re.sub(r"^```json\s*|^```\s*|```$", "", raw, flags=re.MULTILINE).strip()
+    raw = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw)  # fix invalid JSON escapes
     result = json.loads(raw)
 
     corrected = article.copy()
@@ -247,7 +249,7 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
     corrected["meta_description"] = result.get("corrected_meta",    article.get("meta_description", ""))
     corrected["html_content"]     = result.get("corrected_content", article["html_content"])
 
-    issues = result.get("issues_found", [])
+    issues  = result.get("issues_found", [])
     if issues:
         print(f"[INFO] {len(issues)} correction(s) made:")
         for issue in issues:
