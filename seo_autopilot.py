@@ -9,6 +9,7 @@ import json
 import random
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -249,7 +250,7 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
     corrected["meta_description"] = result.get("corrected_meta",    article.get("meta_description", ""))
     corrected["html_content"]     = result.get("corrected_content", article["html_content"])
 
-    issues  = result.get("issues_found", [])
+    issues = result.get("issues_found", [])
     if issues:
         print(f"[INFO] {len(issues)} correction(s) made:")
         for issue in issues:
@@ -287,7 +288,17 @@ def publish_to_wordpress(cfg: dict, article: dict) -> dict:
     }
 
     print(f"[INFO] Publishing to WordPress via custom endpoint...")
-    resp = requests.post(endpoint, json=payload, timeout=60)
+    resp = None
+    for attempt in range(1, 4):
+        try:
+            resp = requests.post(endpoint, json=payload, timeout=60)
+            break
+        except requests.exceptions.Timeout:
+            print(f"[WARNING] Attempt {attempt}/3 timed out. Waiting 15s...")
+            if attempt < 3:
+                time.sleep(15)
+            else:
+                sys.exit("[ERROR] All 3 attempts timed out. Hostinger may be down — try again later.")
 
     if resp.status_code == 401:
         print(f"[ERROR] Secret key rejected (401). Update WP_PASSWORD secret to match wp-seo-post.php.")
