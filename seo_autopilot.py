@@ -145,6 +145,7 @@ def generate_article(cfg: dict, topic: str) -> dict:
         "  title          — H1 title (under 60 chars, includes primary keyword)\n"
         "  meta_description — meta description (120–155 chars, includes keyword)\n"
         "  focus_keyword  — the primary target keyword\n"
+        "  category — choose exactly ONE from this list that best fits the article: Payroll, CIS & Construction, Limited Companies, Xero & Software, Sole Traders & Self Assessment, Influencers & Content Creators, Healthcare Professionals, Bookkeeping & Management Accounts\n"
         "  html_content   — full article body in HTML (no <html>/<body> wrapper)\n\n"
         "Article requirements:\n"
         "- 1,500–2,500 words\n"
@@ -273,7 +274,10 @@ def publish_to_wordpress(cfg: dict, article: dict) -> dict:
     username = cfg.get("wordpress_username", "")
     secret   = cfg["wordpress_password"]   # holds the PHP endpoint secret key
     status   = cfg.get("post_status", "draft")
-    category = cfg.get("category", "News")
+    category = cfg.get("category", "Blog")
+    topic_category = str(article.get("category", "")).strip()
+    if topic_category and topic_category.lower() != category.lower():
+        category = category + ", " + topic_category
 
     endpoint = f"{wp_url}/wp-seo-post.php"
 
