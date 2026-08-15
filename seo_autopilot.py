@@ -164,16 +164,12 @@ def generate_article(cfg: dict, topic: str) -> dict:
     )
 
     print(f"[INFO] Generating article: '{topic}'...")
-    msg = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=8192,
-        messages=[{"role": "user", "content": prompt}],
-        system=system,
-    )
-    raw = msg.content[0].text.strip()
-    raw = re.sub(r"^```json\s*|^```\s*|```$", "", raw, flags=re.MULTILINE).strip()
-    raw = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw)  # fix invalid JSON escapes
-    return json.loads(raw)
+    article_tool = {"name": "submit_article", "description": "Submit the completed, publish-ready SEO blog article.", "input_schema": {"type": "object", "properties": {"title": {"type": "string", "description": "H1 title, under 60 characters, includes the primary keyword."}, "meta_description": {"type": "string", "description": "Meta description, 120-155 characters, includes the keyword."}, "focus_keyword": {"type": "string", "description": "The primary target keyword."}, "category": {"type": "string", "description": "The single category that best fits the article.", "enum": ["Payroll", "CIS & Construction", "Limited Companies", "Xero & Software", "Sole Traders & Self Assessment", "Influencers & Content Creators", "Healthcare Professionals", "Bookkeeping & Management Accounts"]}, "html_content": {"type": "string", "description": "Full article body in HTML, no <html>/<body> wrapper."}}, "required": ["title", "meta_description", "focus_keyword", "category", "html_content"]}}
+    msg = client.messages.create(model="claude-sonnet-4-6", max_tokens=8192, messages=[{"role": "user", "content": prompt}], system=system, tools=[article_tool], tool_choice={"type": "tool", "name": "submit_article"})
+    tool_use = next((b for b in msg.content if b.type == "tool_use"), None)
+    if tool_use is None:
+        raise RuntimeError("Claude did not return a submit_article tool call.")
+    return tool_use.input
 
 # ──────────────────────────────────────────
 # Fetch featured image from Pexels
@@ -239,15 +235,12 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
     )
 
     print("[INFO] Running HMRC accuracy check...")
-    msg = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=8192,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = msg.content[0].text.strip()
-    raw = re.sub(r"^```json\s*|^```\s*|```$", "", raw, flags=re.MULTILINE).strip()
-    raw = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw)  # fix invalid JSON escapes
-    result = json.loads(raw)
+    review_tool = {"name": "submit_review", "description": "Submit the HMRC accuracy review and corrected article.", "input_schema": {"type": "object", "properties": {"corrected_title": {"type": "string", "description": "Title with any fixes applied."}, "corrected_meta": {"type": "string", "description": "Meta description with any fixes applied."}, "corrected_content": {"type": "string", "description": "Full HTML content with all corrections applied."}, "issues_found": {"type": "array", "items": {"type": "string"}, "description": "What was corrected. Empty array if nothing changed."}, "verdict": {"type": "string", "enum": ["clean", "corrected", "needs_review"], "description": "clean = no issues, corrected = fixed and ready, needs_review = uncertain claims remain."}}, "required": ["corrected_title", "corrected_meta", "corrected_content", "issues_found", "verdict"]}}
+    msg = client.messages.create(model="claude-sonnet-4-6", max_tokens=8192, messages=[{"role": "user", "content": prompt}], tools=[review_tool], tool_choice={"type": "tool", "name": "submit_review"})
+    tool_use = next((b for b in msg.content if b.type == "tool_use"), None)
+    if tool_use is None:
+        raise RuntimeError("Claude did not return a submit_review tool call.")
+    result = tool_use.input
 
     corrected = article.copy()
     corrected["title"]            = result.get("corrected_title",   article["title"])
