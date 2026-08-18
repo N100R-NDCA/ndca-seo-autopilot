@@ -5,9 +5,12 @@ Runs daily and posts one SEO-optimised article to your WordPress site.
 Uses WordPress REST API with Basic Authentication plugin.
 """
 
+import io
 import json
+import os
 import random
 import re
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -15,14 +18,18 @@ from pathlib import Path
 
 import anthropic
 import requests
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 # ──────────────────────────────────────────
 # Paths
 # ──────────────────────────────────────────
 BASE_DIR = Path(__file__).parent
-CONFIG   = BASE_DIR / "config.json"
-TOPICS   = BASE_DIR / "topics.json"
-LOG      = BASE_DIR / "published.json"
+CONFIG = BASE_DIR / "config.json"
+TOPICS = BASE_DIR / "topics.json"
+LOG = BASE_DIR / "published.json"
+LOGOS_DIR = BASE_DIR / "assets" / "logos"
+IMAGES_DIR = BASE_DIR / "images"
+FONT_DIR = Path("/usr/share/fonts/truetype/liberation")
 
 # ──────────────────────────────────────────
 # Load config
@@ -61,7 +68,7 @@ def pick_topic(cfg: dict, log: list[dict]) -> str:
 
     print("[INFO] Topic bank empty. Generating new topics via Claude...")
     client = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
-    niche  = cfg.get("niche", "accounting and finance for UK small businesses and founders")
+    niche = cfg.get("niche", "accounting and finance for UK small businesses and founders")
 
     msg = client.messages.create(
         model="claude-sonnet-4-6",
@@ -98,12 +105,12 @@ def pick_topic(cfg: dict, log: list[dict]) -> str:
 # Generate article
 # ──────────────────────────────────────────
 def generate_article(cfg: dict, topic: str) -> dict:
-    client   = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
-    niche    = cfg.get("niche", "accounting and finance for UK small businesses and founders")
-    site     = cfg.get("site_description", "an accounting blog for UK founders and small business owners")
-    tone     = cfg.get("tone", "clear, direct, and practical — no jargon, no fluff")
+    client = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
+    niche = cfg.get("niche", "accounting and finance for UK small businesses and founders")
+    site = cfg.get("site_description", "an accounting blog for UK founders and small business owners")
+    tone = cfg.get("tone", "clear, direct, and practical — no jargon, no fluff")
     tax_year = cfg.get("tax_year", "2025/26")
-    rates    = cfg.get("hmrc_rates", {})
+    rates = cfg.get("hmrc_rates", {})
 
     rates_text = ""
     if rates:
@@ -142,11 +149,11 @@ def generate_article(cfg: dict, topic: str) -> dict:
     prompt = (
         f"Write a complete, publish-ready SEO blog article about: '{topic}'.\n\n"
         "Return ONLY valid JSON with these exact keys:\n"
-        "  title          — H1 title (under 60 chars, includes primary keyword)\n"
+        "  title — H1 title (under 60 chars, includes primary keyword)\n"
         "  meta_description — meta description (120–155 chars, includes keyword)\n"
-        "  focus_keyword  — the primary target keyword\n"
+        "  focus_keyword — the primary target keyword\n"
         "  category — choose exactly ONE from this list that best fits the article: Payroll, CIS & Construction, Limited Companies, Xero & Software, Sole Traders & Self Assessment, Influencers & Content Creators, Healthcare Professionals, Bookkeeping & Management Accounts\n"
-        "  html_content   — full article body in HTML (no <html>/<body> wrapper)\n\n"
+        "  html_content — full article body in HTML (no <html>/<body> wrapper)\n\n"
         "Article requirements:\n"
         "- 1,500–2,500 words\n"
         "- Start with a 2–3 sentence overview paragraph (inside a <p> tag) that summarises what the article covers and who it's for\n"
@@ -194,6 +201,151 @@ def get_featured_image_url(cfg: dict, keyword: str) -> str:
         print(f"[WARNING] Could not fetch image: {e}")
     return ""
 
+# ──────────────────────────────────────────
+# Brand the featured image with the NDCA logo + article title
+# ──────────────────────────────────────────
+def brand_image(image_bytes: bytes, title: str, cfg: dict) -> bytes:
+    """
+    Overlay the NDCA logo (auto-picked black or white variant, based on the
+    brightness of the photo's top-right corner) and the article title onto
+    the featured image. Returns branded JPEG bytes — or the original bytes
+    unchanged if anything goes wrong, so a branding failure never blocks
+    publishing.
+    """
+    try:
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        target_w, target_h = 1200, 630
+        img = ImageOps.fit(img, (target_w, target_h), Image.LANCZOS).convert("RGBA")
+        draw = ImageDraw.Draw(img, "RGBA")
+        W, H = img.size
+
+        # bottom gradient so the title stays legible over any photo
+        grad_h = 300
+        grad = Image.new("RGBA", (W, grad_h), (0, 0, 0, 0))
+        gdraw = ImageDraw.Draw(grad)
+        for y in range(grad_h):
+            alpha = int(210 * (y / grad_h))
+            gdraw.line([(0, y), (W, y)], fill=(8, 10, 12, alpha))
+        img.paste(grad, (0, H - grad_h), grad)
+        draw = ImageDraw.Draw(img, "RGBA")
+
+        # Pick the logo by sampling the top-right corner brightness. The
+        # full-colour main logo (black text, teal circle) is used by default
+        # on every post — it only switches to the all-white variant when the
+        # corner is dark enough that black text wouldn't read cleanly.
+        margin = 32
+        target_logo_w = 240
+        sample_box = (W - target_logo_w - margin, margin, W - margin, margin + 110)
+        corner = img.convert("RGB").crop(sample_box)
+        brightness = sum(corner.convert("L").getdata()) / (corner.width * corner.height)
+        dark_corner = brightness < 140
+
+        preferred = LOGOS_DIR / ("NDCA_Logo_White.png" if dark_corner else "NDCA_Logo_Main.png")
+        alternate = LOGOS_DIR / ("NDCA_Logo_Main.png" if dark_corner else "NDCA_Logo_White.png")
+        logo_path = preferred if preferred.exists() else (alternate if alternate.exists() else None)
+
+        if logo_path and logo_path.exists():
+            logo = Image.open(logo_path).convert("RGBA")
+            logo = logo.crop(logo.getbbox())
+            scale = target_logo_w / logo.width
+            logo = logo.resize((target_logo_w, int(logo.height * scale)), Image.LANCZOS)
+
+            # soft scrim tucked into the corner so the logo stays legible
+            # even if a future photo's corner turns out the opposite tone
+            scrim_w, scrim_h = 340, 170
+            scrim = Image.new("RGBA", (scrim_w, scrim_h), (0, 0, 0, 0))
+            spx = scrim.load()
+            scrim_color = (0, 0, 0) if dark_corner else (255, 255, 255)
+            for yy in range(scrim_h):
+                for xx in range(scrim_w):
+                    d = max(xx / scrim_w, 1 - (yy / scrim_h))
+                    spx[xx, yy] = (*scrim_color, int(110 * d))
+            scrim = scrim.filter(ImageFilter.GaussianBlur(20))
+            img.paste(scrim, (W - scrim_w, 0), scrim)
+            draw = ImageDraw.Draw(img, "RGBA")
+
+            img.paste(logo, (W - target_logo_w - margin, margin), logo)
+            draw = ImageDraw.Draw(img, "RGBA")
+        else:
+            print("[WARNING] No logo file found in assets/logos/ — skipping logo overlay.")
+
+        # article title, bottom left
+        title_font = ImageFont.truetype(str(FONT_DIR / "LiberationSans-Bold.ttf"), 46)
+        tag_font = ImageFont.truetype(str(FONT_DIR / "LiberationSans-Regular.ttf"), 20)
+
+        def wrap_text(text, font, max_width):
+            words, lines, current = text.split(), [], ""
+            for w in words:
+                test = (current + " " + w).strip()
+                bbox = draw.textbbox((0, 0), test, font=font)
+                if bbox[2] - bbox[0] <= max_width:
+                    current = test
+                else:
+                    if current:
+                        lines.append(current)
+                    current = w
+            if current:
+                lines.append(current)
+            return lines
+
+        lines = wrap_text(title, title_font, W - 100)
+        line_height = 56
+        start_y = H - 48 - line_height * len(lines)
+        for i, line in enumerate(lines):
+            draw.text((50, start_y + i * line_height), line, font=title_font, fill=(255, 255, 255, 255))
+
+        site_tag = cfg.get("wordpress_url", "").replace("https://", "").replace("http://", "").rstrip("/")
+        if site_tag:
+            draw.text((50, H - 38), site_tag, font=tag_font, fill=(200, 210, 216, 255))
+
+        out = io.BytesIO()
+        img.convert("RGB").save(out, format="JPEG", quality=90)
+        return out.getvalue()
+    except Exception as e:
+        print(f"[WARNING] Branding failed, using original image unbranded: {e}")
+        return image_bytes
+
+# ──────────────────────────────────────────
+# Brand the image, commit it to the repo, and return its public URL
+# ──────────────────────────────────────────
+def brand_and_publish_image(cfg: dict, source_url: str, title: str) -> str:
+    """
+    Downloads the stock photo, brands it, commits it to images/ in this
+    repo, pushes, and returns the public raw.githubusercontent.com URL for
+    WordPress to fetch. Falls back to the original unbranded source_url if
+    anything in this pipeline fails, so a branding or git issue never blocks
+    the day's post from publishing.
+    """
+    try:
+        resp = requests.get(source_url, timeout=20)
+        resp.raise_for_status()
+        branded_bytes = brand_image(resp.content, title, cfg)
+
+        IMAGES_DIR.mkdir(exist_ok=True)
+        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60]
+        filename = f"{datetime.now().strftime('%Y-%m-%d')}-{slug}.jpg"
+        filepath = IMAGES_DIR / filename
+        with open(filepath, "wb") as f:
+            f.write(branded_bytes)
+        print(f"[INFO] Branded image saved: images/{filename}")
+
+        rel_path = f"images/{filename}"
+        subprocess.run(["git", "add", rel_path], check=True, cwd=BASE_DIR)
+        commit = subprocess.run(
+            ["git", "commit", "-m", f"Add branded image for {title}"],
+            cwd=BASE_DIR, capture_output=True, text=True,
+        )
+        if commit.returncode != 0 and "nothing to commit" not in commit.stdout:
+            print(f"[WARNING] git commit issue: {commit.stdout} {commit.stderr}")
+        subprocess.run(["git", "push"], check=True, cwd=BASE_DIR)
+
+        repo = os.environ.get("GITHUB_REPOSITORY", "N100R-NDCA/ndca-seo-autopilot")
+        raw_url = f"https://raw.githubusercontent.com/{repo}/main/{rel_path}"
+        print(f"[INFO] Branded image pushed: {raw_url}")
+        return raw_url
+    except Exception as e:
+        print(f"[WARNING] Could not brand/publish image, falling back to the original: {e}")
+        return source_url
 
 # ──────────────────────────────────────────
 # Review and correct article for HMRC accuracy
@@ -204,9 +356,9 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
     corrects wrong tax year references, and returns a corrected article.
     Always publishes — review corrects figures but never blocks publication.
     """
-    client   = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
+    client = anthropic.Anthropic(api_key=cfg["anthropic_api_key"])
     tax_year = cfg.get("tax_year", "2025/26")
-    rates    = cfg.get("hmrc_rates", {})
+    rates = cfg.get("hmrc_rates", {})
 
     rates_lines = "\n".join(
         f"  - {k.replace('_', ' ').title()}: {v}" for k, v in rates.items()
@@ -227,11 +379,11 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
         "replace it with 'check the latest HMRC guidance for current figures'.\n"
         "5. Do not change the writing style, structure, or any non-tax content.\n\n"
         "Return ONLY valid JSON with these exact keys:\n"
-        "  corrected_title          — title with any fixes applied\n"
-        "  corrected_meta           — meta description with any fixes applied\n"
-        "  corrected_content        — full HTML content with all corrections applied\n"
-        "  issues_found             — JSON array of strings describing what was corrected (empty if nothing changed)\n"
-        "  verdict                  — 'clean' (no issues), 'corrected' (fixed and ready), or 'needs_review' (uncertain claims remain)\n"
+        "  corrected_title — title with any fixes applied\n"
+        "  corrected_meta — meta description with any fixes applied\n"
+        "  corrected_content — full HTML content with all corrections applied\n"
+        "  issues_found — JSON array of strings describing what was corrected (empty if nothing changed)\n"
+        "  verdict — 'clean' (no issues), 'corrected' (fixed and ready), or 'needs_review' (uncertain claims remain)\n"
     )
 
     print("[INFO] Running HMRC accuracy check...")
@@ -243,9 +395,9 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
     result = tool_use.input
 
     corrected = article.copy()
-    corrected["title"]            = result.get("corrected_title",   article["title"])
-    corrected["meta_description"] = result.get("corrected_meta",    article.get("meta_description", ""))
-    corrected["html_content"]     = result.get("corrected_content", article["html_content"])
+    corrected["title"] = result.get("corrected_title", article["title"])
+    corrected["meta_description"] = result.get("corrected_meta", article.get("meta_description", ""))
+    corrected["html_content"] = result.get("corrected_content", article["html_content"])
 
     issues = result.get("issues_found", [])
     if issues:
@@ -257,16 +409,15 @@ def review_article(cfg: dict, article: dict) -> tuple[dict, bool]:
 
     return corrected, True
 
-
 # ──────────────────────────────────────────
 # Publish to WordPress via custom PHP endpoint
 # (bypasses Authorization header stripping on Hostinger)
 # ──────────────────────────────────────────
 def publish_to_wordpress(cfg: dict, article: dict) -> dict:
-    wp_url   = cfg["wordpress_url"].rstrip("/")
+    wp_url = cfg["wordpress_url"].rstrip("/")
     username = cfg.get("wordpress_username", "")
-    secret   = cfg["wordpress_password"]   # holds the PHP endpoint secret key
-    status   = cfg.get("post_status", "draft")
+    secret = cfg["wordpress_password"]  # holds the PHP endpoint secret key
+    status = cfg.get("post_status", "draft")
     category = cfg.get("category", "Blog")
     topic_category = str(article.get("category", "")).strip()
     if topic_category and topic_category.lower() != category.lower():
@@ -275,16 +426,16 @@ def publish_to_wordpress(cfg: dict, article: dict) -> dict:
     endpoint = f"{wp_url}/wp-seo-post.php"
 
     payload = {
-        "secret":           secret,
-        "username":         username,
-        "title":            article["title"],
-        "content":          article["html_content"],
-        "excerpt":          article.get("meta_description", ""),
-        "status":           status,
-        "category":         category,
-        "focus_keyword":    article.get("focus_keyword", ""),
+        "secret": secret,
+        "username": username,
+        "title": article["title"],
+        "content": article["html_content"],
+        "excerpt": article.get("meta_description", ""),
+        "status": status,
+        "category": category,
+        "focus_keyword": article.get("focus_keyword", ""),
         "meta_description": article.get("meta_description", ""),
-        "image_url":        article.get("image_url", ""),
+        "image_url": article.get("image_url", ""),
     }
 
     headers = {
@@ -318,8 +469,8 @@ def publish_to_wordpress(cfg: dict, article: dict) -> dict:
 
     post = resp.json()
     return {
-        "id":    post.get("id"),
-        "url":   post.get("url", f"{wp_url}/?p={post.get('id')}"),
+        "id": post.get("id"),
+        "url": post.get("url", f"{wp_url}/?p={post.get('id')}"),
         "title": article["title"],
     }
 
@@ -328,13 +479,13 @@ def publish_to_wordpress(cfg: dict, article: dict) -> dict:
 # ──────────────────────────────────────────
 def main():
     print(f"\n{'='*60}")
-    print(f"  SEO Autopilot  —  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f" SEO Autopilot — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*60}\n")
 
-    cfg  = load_config()
-    log  = load_log()
+    cfg = load_config()
+    log = load_log()
 
-    topic   = pick_topic(cfg, log)
+    topic = pick_topic(cfg, log)
     print(f"[INFO] Topic selected: {topic}")
 
     article = generate_article(cfg, topic)
@@ -347,21 +498,23 @@ def main():
     image_url = get_featured_image_url(cfg, article.get("focus_keyword", topic))
     if image_url:
         print(f"[INFO] Featured image fetched from Pexels.")
+        branded_url = brand_and_publish_image(cfg, image_url, article["title"])
+        article["image_url"] = branded_url
     else:
         print(f"[INFO] No featured image — continuing without one.")
-    article["image_url"] = image_url
+        article["image_url"] = ""
 
-    result  = publish_to_wordpress(cfg, article)
+    result = publish_to_wordpress(cfg, article)
     print(f"\n[SUCCESS] Posted: {result['title']}")
     print(f"[SUCCESS] Post ID: {result.get('id')}")
     print(f"[SUCCESS] URL: {result.get('url')}")
 
     log.append({
-        "topic":     topic,
-        "title":     article["title"],
-        "keyword":   article.get("focus_keyword", ""),
-        "post_id":   result.get("id"),
-        "url":       result.get("url"),
+        "topic": topic,
+        "title": article["title"],
+        "keyword": article.get("focus_keyword", ""),
+        "post_id": result.get("id"),
+        "url": result.get("url"),
         "published": datetime.now().isoformat(),
     })
     save_log(log)
