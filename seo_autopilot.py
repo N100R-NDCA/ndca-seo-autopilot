@@ -294,9 +294,12 @@ def brand_image(image_bytes: bytes, title: str, cfg: dict) -> bytes:
         for i, line in enumerate(lines):
             draw.text((50, start_y + i * line_height), line, font=title_font, fill=(255, 255, 255, 255))
 
+        # site text, bottom right
         site_tag = cfg.get("wordpress_url", "").replace("https://", "").replace("http://", "").rstrip("/")
         if site_tag:
-            draw.text((50, H - 38), site_tag, font=tag_font, fill=(200, 210, 216, 255))
+            bbox = draw.textbbox((0, 0), site_tag, font=tag_font)
+            text_w = bbox[2] - bbox[0]
+            draw.text((W - margin - text_w, H - 38), site_tag, font=tag_font, fill=(200, 210, 216, 255))
 
         out = io.BytesIO()
         img.convert("RGB").save(out, format="JPEG", quality=90)
