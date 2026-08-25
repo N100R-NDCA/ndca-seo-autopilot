@@ -11,8 +11,7 @@
 
   "category": "Blog",
 
-  "tax_year": "2025/26",
-
+  "tax_year": "2026/27",
   "hmrc_rates": {
     "personal_allowance": "£12,570",
     "basic_rate_threshold": "£50,270",
@@ -26,9 +25,10 @@
     "employer_ni_rate": "15%",
     "employer_ni_threshold": "£5,000",
     "employee_ni_rate": "8% (on earnings £12,570–£50,270)",
+    "employment_allowance": "£10,500",
     "dividend_allowance": "£500",
-    "dividend_basic_rate": "8.75%",
-    "dividend_higher_rate": "33.75%",
+    "dividend_basic_rate": "10.75%",
+    "dividend_higher_rate": "35.75%",
     "dividend_additional_rate": "39.35%",
     "capital_gains_allowance": "£3,000",
     "vat_registration_threshold": "£90,000",
