@@ -185,17 +185,34 @@ def get_featured_image_url(cfg: dict, keyword: str) -> str:
     api_key = cfg.get("pexels_api_key", "")
     if not api_key or api_key == "placeholder":
         return ""
+    # This site is a UK chartered accountancy firm. Featured images must never
+    # show US-specific tax forms (1040, Schedule C/SE), US currency, USPS
+    # labels, or other non-UK content. A bare keyword search on Pexels' mostly
+    # US-weighted library returns this kind of image far too often, so we bias
+    # the query toward the UK and filter out any candidate whose description
+    # matches a known US-content term before falling back to an unfiltered pick.
+    blocked_terms = [
+        "1040", "irs", "schedule c", "schedule se", "self-employment tax",
+        "usps", "us dollar", "dollar bill", "usd", "u.s.", "united states",
+        "internal revenue", "w-2", "w2", "federal tax",
+    ]
     try:
+        query = f"{keyword} UK"
         resp = requests.get(
             "https://api.pexels.com/v1/search",
             headers={"Authorization": api_key},
-            params={"query": keyword, "orientation": "landscape", "per_page": 5},
+            params={"query": query, "orientation": "landscape", "per_page": 15},
             timeout=15,
         )
         if resp.status_code == 200:
             photos = resp.json().get("photos", [])
-            if photos:
-                photo = random.choice(photos)
+            safe_photos = [
+                p for p in photos
+                if not any(term in (p.get("alt") or "").lower() for term in blocked_terms)
+            ]
+            candidates = safe_photos or photos
+            if candidates:
+                photo = random.choice(candidates)
                 return photo["src"]["large"]
     except Exception as e:
         print(f"[WARNING] Could not fetch image: {e}")
