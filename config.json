@@ -1,16 +1,11 @@
 {
   "anthropic_api_key": "placeholder",
-
-  "wordpress_url":      "https://nd-ca.co.uk",
+  "wordpress_url": "https://nd-ca.co.uk",
   "wordpress_username": "info@ndcabookkeeping.co.uk",
   "wordpress_password": "placeholder",
-
   "post_status": "publish",
-
   "pexels_api_key": "placeholder",
-
   "category": "Blog",
-
   "tax_year": "2026/27",
   "hmrc_rates": {
     "personal_allowance": "£12,570",
@@ -36,30 +31,32 @@
     "pension_annual_allowance": "£60,000",
     "mtd_itsa_start": "April 2026 (self-employed and landlords with income over £50,000)"
   },
-
   "niche": "UK accounting and tax for small businesses, limited company directors, sole traders, landlords, construction trades, e-commerce sellers, freelancers, and healthcare professionals",
-
-  "site_description": "NDCA is a chartered certified accountants firm based in the UK offering bookkeeping, corporation tax, self assessment, VAT returns, payroll, CIS returns, management accounts, and Xero training to small businesses and sole traders",
-
-  "tone": "clear, direct, and practical — no jargon, no waffle. Sounds like a knowledgeable chartered accountant giving real advice to a client. UK English throughout.",
-
+  "site_description": "NDCA, an ACCA-regulated UK accountancy practice offering bookkeeping, corporation tax, annual accounts, self assessment, VAT returns, payroll, CIS returns, management accounts and company formation to growing UK limited companies, sole traders and landlords on fixed monthly fees with a named accountant",
+  "tone": "clear, direct and practical, with no jargon and no waffle. Sounds like a knowledgeable ACCA-regulated accountant giving real advice to a client. UK English throughout. HOUSE STYLE RULES, follow every one: never use em dashes or en dashes as punctuation (use commas, full stops or colons instead); never use semicolons; never use contractions (write 'do not', 'you will', 'it is'); no Oxford commas; sentence-case headings; never suggest the reader does their own bookkeeping or learns Xero themselves, and point them to NDCA's bookkeeping service instead; never mention Xero training; describe NDCA as an ACCA-regulated accountancy practice, never as chartered accountants or chartered certified accountants; never mention pubs; say NDCA normally replies the same day, never 'within one working day'",
   "internal_links": {
-    "bookkeeping":         "https://nd-ca.co.uk/bookkeeping/",
-    "self assessment":     "https://nd-ca.co.uk/self-assessment/",
-    "VAT returns":         "https://nd-ca.co.uk/vat-returns/",
-    "corporation tax":     "https://nd-ca.co.uk/corporation-tax/",
-    "annual accounts":     "https://nd-ca.co.uk/annual-accounts/",
-    "payroll":             "https://nd-ca.co.uk/payroll/",
-    "CIS returns":         "https://nd-ca.co.uk/cis-returns/",
-    "management accounts": "https://nd-ca.co.uk/management-accounts/",
-    "cash flow":           "https://nd-ca.co.uk/cash-flow-and-budgeting/",
-    "Making Tax Digital":  "https://nd-ca.co.uk/making-tax-digital/",
-    "Xero training":       "https://nd-ca.co.uk/xero-training/",
-    "landlords":           "https://nd-ca.co.uk/landlords-and-property-investors/",
-    "construction":        "https://nd-ca.co.uk/construction-and-trades/",
-    "e-commerce":          "https://nd-ca.co.uk/e-commerce-and-retail/",
-    "freelancers":         "https://nd-ca.co.uk/agencies-consultants-and-freelancers/",
-    "healthcare":          "https://nd-ca.co.uk/healthcare-professionals/",
-    "content creators":    "https://nd-ca.co.uk/influencers-and-content-creators/"
+    "bookkeeping": "https://nd-ca.co.uk/bookkeeping-services-uk/",
+    "bookkeeping catch-up": "https://nd-ca.co.uk/bookkeeping-catch-up-uk/",
+    "self assessment": "https://nd-ca.co.uk/self-assessment-accountant-uk/",
+    "VAT returns": "https://nd-ca.co.uk/vat-return-accountant-uk/",
+    "corporation tax": "https://nd-ca.co.uk/corporation-tax-accountant-uk/",
+    "annual accounts": "https://nd-ca.co.uk/annual-accounts-uk/",
+    "payroll": "https://nd-ca.co.uk/outsourced-payroll-services/",
+    "CIS returns": "https://nd-ca.co.uk/cis-accountant-uk/",
+    "management accounts": "https://nd-ca.co.uk/management-accounts-uk/",
+    "cash flow forecasting": "https://nd-ca.co.uk/cash-flow-forecasting-uk/",
+    "Making Tax Digital": "https://nd-ca.co.uk/mtd-for-income-tax-accountant/",
+    "company formation": "https://nd-ca.co.uk/company-formation-uk/",
+    "switching accountants": "https://nd-ca.co.uk/switch-accountants-uk/",
+    "landlords": "https://nd-ca.co.uk/accountant-for-landlords-and-property-investors-uk/",
+    "construction": "https://nd-ca.co.uk/accountant-for-construction-and-trades-uk/",
+    "e-commerce": "https://nd-ca.co.uk/accountant-for-e-commerce-and-retail-uk/",
+    "agencies and consultancies": "https://nd-ca.co.uk/accountant-for-agencies-and-consultancies-uk/",
+    "freelancers": "https://nd-ca.co.uk/accountant-for-agencies-and-consultancies-uk/",
+    "IT contractors": "https://nd-ca.co.uk/accountant-for-it-contractors-uk/",
+    "healthcare": "https://nd-ca.co.uk/accountant-for-healthcare-professionals-uk/",
+    "content creators": "https://nd-ca.co.uk/accountant-for-influencers-and-content-creators-uk/",
+    "tech and SaaS": "https://nd-ca.co.uk/accountant-for-uk-tech-saas-and-ai-businesses/",
+    "hospitality": "https://nd-ca.co.uk/accountant-for-hospitality-businesses-uk/"
   }
 }
