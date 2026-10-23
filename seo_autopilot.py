@@ -495,6 +495,87 @@ def publish_to_wordpress(cfg: dict, article: dict) -> dict:
     }
 
 # ──────────────────────────────────────────
+# NDCA house style clean-up (safety net after generation)
+# ──────────────────────────────────────────
+OLD_LINKS = {
+    "/bookkeeping/": "/bookkeeping-services-uk/",
+    "/self-assessment/": "/self-assessment-accountant-uk/",
+    "/annual-accounts/": "/annual-accounts-uk/",
+    "/corporation-tax/": "/corporation-tax-accountant-uk/",
+    "/vat-returns/": "/vat-return-accountant-uk/",
+    "/payroll/": "/outsourced-payroll-services/",
+    "/management-accounts/": "/management-accounts-uk/",
+    "/cis-returns/": "/cis-accountant-uk/",
+    "/cash-flow-and-budgeting/": "/cash-flow-forecasting-uk/",
+    "/making-tax-digital/": "/mtd-for-income-tax-accountant/",
+    "/xero-training/": "/bookkeeping-services-uk/",
+    "/landlords-and-property-investors/": "/accountant-for-landlords-and-property-investors-uk/",
+    "/influencers-and-content-creators/": "/accountant-for-influencers-and-content-creators-uk/",
+    "/healthcare-professionals/": "/accountant-for-healthcare-professionals-uk/",
+    "/construction-and-trades/": "/accountant-for-construction-and-trades-uk/",
+    "/e-commerce-and-retail/": "/accountant-for-e-commerce-and-retail-uk/",
+    "/agencies-consultants-and-freelancers/": "/accountant-for-agencies-and-consultancies-uk/",
+}
+
+CONTRACTIONS = {
+    "don't": "do not", "doesn't": "does not", "didn't": "did not", "can't": "cannot", "won't": "will not",
+    "isn't": "is not", "aren't": "are not", "wasn't": "was not", "weren't": "were not", "haven't": "have not",
+    "hasn't": "has not", "hadn't": "had not", "shouldn't": "should not", "wouldn't": "would not",
+    "couldn't": "could not", "it's": "it is", "that's": "that is", "there's": "there is", "here's": "here is",
+    "what's": "what is", "you're": "you are", "we're": "we are", "they're": "they are", "you'll": "you will",
+    "we'll": "we will", "they'll": "they will", "it'll": "it will", "you've": "you have", "we've": "we have",
+    "they've": "they have", "you'd": "you would", "we'd": "we would", "they'd": "they would", "i'm": "I am",
+    "let's": "let us",
+}
+
+ENQUIRY_BOX = (
+    '<div class="ndca-enquiry"><p class="ndca-enquiry-title">Want an accountant to handle this for you?</p>'
+    '<p class="ndca-enquiry-text">NDCA is an ACCA-regulated accountancy practice with fixed monthly fees and a named '
+    'accountant who normally gets back to you the same day.</p><p class="ndca-enquiry-btn"><a class="ndca-button-cta" '
+    'href="https://app.usesocket.com/f/54fbc393-af21-42ff-a12c-746ec1b8c00f" target="_blank" rel="noopener">'
+    'Get My Accounting Quote</a></p></div>'
+)
+
+
+def _fix_text(text: str) -> str:
+    # em and en dashes used as punctuation
+    text = re.sub(r"\s+[—–]\s+([^—–.]{1,140}?)\s+[—–]\s+", r", \1, ", text)
+    text = re.sub(r"\s*—\s*", ", ", text)
+    text = re.sub(r"\s+–\s+", ", ", text)
+    # semicolons (leave HTML entities alone)
+    text = re.sub(r"(&[#A-Za-z0-9]+;)|;\s+(\w)", lambda m: m.group(1) or (". " + m.group(2).upper()), text)
+    # contractions (straight and curly apostrophes)
+    def _expand(m):
+        word = m.group(0)
+        key = word.replace("’", "'").lower()
+        rep = CONTRACTIONS.get(key)
+        if not rep:
+            return word
+        return rep[0].upper() + rep[1:] if word[0].isupper() else rep
+    text = re.sub(r"\b[A-Za-z]+['’][a-z]+\b", _expand, text)
+    text = text.replace(" ,", ",")
+    return text
+
+
+def apply_house_style(html: str) -> str:
+    html = html.replace("&mdash;", "—").replace("&#8212;", "—").replace("&ndash;", "–").replace("&#8211;", "–")
+    html = re.sub(r"(</strong>|</b>)\s*[—–]\s*", r"\1: ", html)
+    parts = re.split(r"(<[^>]+>)", html)
+    out = []
+    for part in parts:
+        if part.startswith("<"):
+            out.append(part)
+        else:
+            out.append(_fix_text(part))
+    html = "".join(out)
+    for old, new in OLD_LINKS.items():
+        html = html.replace("https://nd-ca.co.uk" + old + '"', "https://nd-ca.co.uk" + new + '"')
+        html = html.replace("https://nd-ca.co.uk" + old + "'", "https://nd-ca.co.uk" + new + "'")
+    if "ndca-enquiry" not in html:
+        html = html.rstrip() + "\n" + ENQUIRY_BOX
+    return html
+
+# ──────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────
 def main():
@@ -524,6 +605,8 @@ def main():
         print(f"[INFO] No featured image — continuing without one.")
         article["image_url"] = ""
 
+    article["html_content"] = apply_house_style(article["html_content"])
+    print("[INFO] House style clean-up applied (dashes, semicolons, contractions, links, enquiry box).")
     result = publish_to_wordpress(cfg, article)
     print(f"\n[SUCCESS] Posted: {result['title']}")
     print(f"[SUCCESS] Post ID: {result.get('id')}")
