@@ -553,6 +553,9 @@ def _fix_text(text: str) -> str:
             return word
         return rep[0].upper() + rep[1:] if word[0].isupper() else rep
     text = re.sub(r"\b[A-Za-z]+['’][a-z]+\b", _expand, text)
+    # HMRC capitalisation for tax names
+    text = re.sub(r"(?<![\w/-])[Cc]orporation tax\b", "Corporation Tax", text)
+    text = re.sub(r"(?<![\w/-])[Ss]elf assessment\b", "Self Assessment", text)
     text = text.replace(" ,", ",")
     return text
 
@@ -575,6 +578,21 @@ def apply_house_style(html: str) -> str:
         html = html.rstrip() + "\n" + ENQUIRY_BOX
     return html
 
+SMALL_WORDS = {"a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "into", "of", "on", "or", "the", "to", "vs", "via", "with"}
+KEEP_AS_WRITTEN = {"eBay", "iPhone", "iPad"}
+
+
+def title_case(title: str) -> str:
+    """Title Case blog titles to match the rest of the site. Acronyms and brand spellings stay as written."""
+    out = []
+    start = True
+    for word in title.split(" "):
+        if word and word not in KEEP_AS_WRITTEN and (start or word.lower() not in SMALL_WORDS):
+            word = "-".join(seg[:1].upper() + seg[1:] if seg[:1].islower() else seg for seg in word.split("-"))
+        out.append(word)
+        start = word.endswith((":", "?"))
+    return " ".join(out)
+
 # ──────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────
@@ -595,6 +613,7 @@ def main():
 
     article, is_publishable = review_article(cfg, article)
     print(f"[INFO] Reviewed title: '{article['title']}'")
+    article["title"] = title_case(article["title"])
 
     image_url = get_featured_image_url(cfg, article.get("focus_keyword", topic))
     if image_url:
