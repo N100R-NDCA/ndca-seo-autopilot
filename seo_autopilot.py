@@ -556,6 +556,8 @@ def _fix_text(text: str) -> str:
     # HMRC capitalisation for tax names
     text = re.sub(r"(?<![\w/-])[Cc]orporation tax\b", "Corporation Tax", text)
     text = re.sub(r"(?<![\w/-])[Ss]elf assessment\b", "Self Assessment", text)
+    # never mention a 30-minute call, just a free consultation
+    text = re.sub(r"\b([Ff]ree) 30[- ]?[Mm]in(?:ute)?s? ([Cc]all|[Cc]onsultation)\b", lambda m: m.group(1) + " " + ("Consultation" if m.group(2)[0] == "C" else "consultation"), text)
     text = text.replace(" ,", ",")
     return text
 
